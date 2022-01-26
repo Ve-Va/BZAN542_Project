@@ -1,0 +1,95 @@
+---
+title: "Association Rules 2010"
+author: "Lauren Beavers"
+date: "11/15/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Association Rules - 2010 Retail Customers Only
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(arules)
+library(arulesViz)
+
+retail2010 <- read.csv("online_retail_2010-2011.csv")
+retail2010 <- retail2010[rowSums(is.na(retail2010)) == 0,]
+
+retail2010 <- retail2010[which(retail2010$Price>0),]
+retail2010 <- retail2010[which(retail2010$Quantity>0),]
+
+INVOICE_LIST=retail2010 %>%
+    group_by(Invoice) %>%
+    summarize(StockList=list(unique(StockCode)), DescList  = list(unique(Description)))
+head(INVOICE_LIST)
+dim(INVOICE_LIST)
+
+
+CUSTOMER_LIST=retail2010 %>%
+    group_by(Customer.ID) %>%
+    summarize(StockList=list(unique(StockCode)), DescList  = list(unique(Description)))
+head(CUSTOMER_LIST)
+dim(CUSTOMER_LIST)
+
+
+INVOICE_CODE=as(INVOICE_LIST$StockList, 'transactions')
+inspect(head(INVOICE_CODE))
+INVOICE_DESC=as(INVOICE_LIST$DescList, 'transactions')
+inspect(head(INVOICE_DESC))
+
+CUSTOMER_CODE=as(CUSTOMER_LIST$StockList, 'transactions')
+inspect(head(CUSTOMER_CODE))
+CUSTOMER_DESC=as(CUSTOMER_LIST$DescList, 'transactions')
+inspect(head(CUSTOMER_DESC))
+
+# these plots are basically unusable
+# itemFrequencyPlot(INVOICE_CODE)
+# itemFrequencyPlot(INVOICE_DESC)
+
+## invoice-level rules
+CODErules=apriori(INVOICE_CODE, parameter=list(support=0.01, confidence=0.5))
+summary(CODErules)
+# keeping significant rules
+CODErules <- CODErules[is.significant(CODErules, INVOICE_CODE)]
+# removing redundant rules
+CODErules <- CODErules[!is.redundant(CODErules)]
+
+DESCrules=apriori(INVOICE_DESC, parameter=list(support=0.01, confidence=0.5))
+summary(DESCrules)
+# keeping significant rules
+#DESCrules <- DESCrules[is.significant(DESCrules, INVOICE_DESC)]
+# removing redundant rules
+#DESCrules <- DESCrules[!is.redundant(DESCrules)]
+
+## customer-level rules
+C_CODErules=apriori(CUSTOMER_CODE, parameter=list(support=0.01, confidence=0.5))
+summary(C_CODErules)
+# keeping significant rules
+#C_CODErules <- C_CODErules[is.significant(C_CODErules, CUSTOMER_CODE)]
+# removing redundant rules
+#C_CODErules <- C_CODErules[!is.redundant(C_CODErules)]
+
+C_DESCrules=apriori(CUSTOMER_DESC, parameter=list(support=0.01, confidence=0.5))
+summary(DESCrules)
+# keeping significant rules
+#C_DESCrules <- C_DESCrules[is.significant(C_DESCrules, CUSTOMER_DESC)]
+# removing redundant rules
+#C_DESCrules <- C_DESCrules[-is.redundant(C_DESCrules)]
+
+
+subsetRules <- which(colSums(is.subset(DESCrules, DESCrules)) > 1) # get subset rules in vector
+length(subsetRules)  #
+DESCrules <- DESCrules[-subsetRules] # remove subset rules.
+
+DESCrules_conf <- sort(DESCrules, by="confidence", decreasing=TRUE)
+inspect(head(DESCrules_conf, 20)) # top 20 rules (confidence)
+DESCrules_lift <- sort(DESCrules, by="lift", decreasing=TRUE)
+inspect(head(DESCrules_lift, 20)) # top 20 rules (lift)
+```
+
