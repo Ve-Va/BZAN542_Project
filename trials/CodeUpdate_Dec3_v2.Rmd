@@ -1,0 +1,642 @@
+---
+output:
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+# Load relevant packages
+
+```{r, include=FALSE}
+library(tidyr)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(cluster)
+library(tidyr)
+library(lubridate)
+library(scatterplot3d)
+```
+
+
+# Extracting the datasets
+
+```{r}
+
+data = read.csv("online_retail2.csv")
+
+# Transforming Date Column
+data$InvoiceDate = as.Date(data$InvoiceDate,'%m/%d/%Y')
+min(data$InvoiceDate);max(data$InvoiceDate)
+
+```
+
+# Checking the data sets
+
+```{r}
+glimpse(data)
+```
+
+
+# splitting data sets for ease of use and useful stats
+
+```{r}
+# NA/Null Value check
+apply(is.na(data),2,sum)
+
+
+# Number of Unique Transactions
+length(unique(data$Invoice))
+
+```
+
+# Grouping Invoices
+
+```{r}
+
+invoice = 
+  data %>% 
+  group_by(Invoice, Customer.ID, Country) %>% 
+  summarise(InvoiceDate = max(InvoiceDate, na.rm = T),
+            Items = n_distinct(StockCode),
+            Quantity = sum(Quantity, na.rm = T),
+            InvoiceAmount = sum(Quantity * Price, na.rm = T)) %>% 
+  mutate(Inv_Status = ifelse(substr(Invoice,1,1) %in% letters | 
+                               substr(Invoice,1,1) %in% LETTERS, 
+                             "Cancelled", 
+                             "Approved"))
+
+table(invoice$Inv_Status)
+
+```
+
+# Grouping Items
+
+```{r}
+
+items = 
+  data %>% 
+  group_by(StockCode,Description) %>% 
+  summarise(Sold = sum(Quantity, na.rm = T),
+            Sales = sum(Quantity * Price, na.rm = T)) %>% 
+  arrange(desc(Sales))
+
+```
+
+
+
+```{r}
+
+# Based on what we have seen and learned. All the places where customer.id is null must be looked into and see if we can assume them as Wholesale customers...
+
+dim(invoice)
+
+nrow(invoice %>% filter(is.na(Customer.ID)))
+
+# You observe that there are around 3710 records among 25.9K which mostly have bigger baskets than the other ones...
+# Lets add a variable Group which segregates the retail and customer groups.
+# This is an assumption -- In general we discuss this with the business and suggest them to have a process in place to capture data for wholesale customers. We see that this data is being pushed manually. Hence there is no customer.id associated. Doing this in next years will help us substantiate the analysis for Wholesale group as well
+```
+
+# Adding/Classifying by Customer Group
+
+```{r}
+
+invoice = 
+  invoice %>% 
+  mutate(CustGroup = ifelse(is.na(Customer.ID), "Wholesale", "Retail"))
+
+# We can do our analysis on Retail ones but also see what can be done on Wholesale group
+
+stats = 
+  invoice %>%
+  group_by(CustGroup) %>%
+  summarise(n_invoices = n(),
+            invoiceAmount = sum(InvoiceAmount, na.rm = TRUE))
+
+ggplot(stats) +
+  geom_bar(aes(x = CustGroup, y = n_invoices), stat = "identity", fill = "black") +
+  labs(x = "Customer group", 
+       y = "Number of invoices",
+       title = "Number of invoices per customer group") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(stats) +
+  geom_bar(aes(x = CustGroup, y = invoiceAmount), stat = "identity", fill = "darkblue") +
+  labs(x = "Customer group", 
+       y = "Invoice amounts",
+       title = "Amounts per customer group") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+# Is Country important?
+# Top 5 countries in Sales
+
+invoice %>%
+  group_by(Country) %>%
+  summarise(Amount = sum(InvoiceAmount, na.rm = TRUE)) %>%
+  filter(rank(desc(Amount)) <= 5) %>% 
+  arrange(desc(Amount))
+
+# Sales per country and cool plot with world map
+library(leaflet)
+library(rworldmap)
+
+Country_Sales = invoice %>%
+  group_by(Country) %>%
+  summarise(Amount = sum(InvoiceAmount, na.rm = TRUE)) %>% 
+  arrange(desc(Amount))
+
+ggplot(Country_Sales[1:10,]) +
+  geom_point(aes(x = Amount, y = Country, color = Country)) +
+  labs(x = "Revenue", 
+       y = "Country",
+       title = "Top 10 Countries by Revenue") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+sPDF = joinCountryData2Map(Country_Sales
+                           ,joinCode = "NAME"
+                           ,nameJoinColumn = "Country", verbose = FALSE)
+
+# select only the countries which generated revenue
+existing_countries = subset(sPDF, !is.na(Amount))
+
+# create spending classes for revenues per country
+bins = c(0, 50000, 100000, 150000, 200000, 250000, 300000, Inf)
+
+# Assign a color to each of the classes
+pal = colorBin("YlOrRd", domain = existing_countries$Amount, bins = bins)
+
+# Create labels with actual revenue amounts per country, for hover info
+labels = paste0("<strong>", existing_countries$Country, 
+                "</strong><br/>", 
+                format(existing_countries$Amount, 
+                       digits = 0, 
+                       big.mark = ".", 
+                       decimal.mark = ",", 
+                       scientific = FALSE),
+                " GBP") %>% lapply(htmltools::HTML)
+
+# creating the map
+
+leaflet(existing_countries) %>% 
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addPolygons(
+    fillColor = ~pal(Amount),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 2,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", 
+                   padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")) %>% 
+  addLegend(pal = pal, 
+            values = ~Amount, 
+            opacity = 0.7, 
+            title = NULL,
+            position = "topright") %>%
+  setView(17,34,2)
+```
+
+```{r}
+# How many times in a year do retail customers make purchases? How many of them are frequent repeat customers?
+
+invoice %>%
+  filter(CustGroup == "Retail") %>%
+  group_by(Customer.ID) %>%
+  summarise(NumInvoices = n()) %>%
+  ungroup() %>%
+  group_by(NumInvoices) %>%
+  summarise(NumCustomers = n()) %>%
+  arrange(desc(NumInvoices)) %>%
+  collect() %>%
+  ggplot() +
+  geom_freqpoly(aes(x = NumInvoices, y = NumCustomers), stat = "identity", colour = "black") +
+  labs(x = "Number of purchases",
+       y = "Number of customers",
+       title = "Retail customers by number of purchases") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+## Mix of Data Cleaning and Transformation for Clustering...
+
+```{r}
+# Clustering Prep
+# Using Retail Customer Data set
+
+# Remove all rows without Customer ID -- Working on Retail Customers
+retail = data[!is.na(data$Customer.ID), ]
+
+# Remove the invoices with negative quantity and price which are return transactions
+# This is to see the quality of sales as most of the transactions are small ones... If we use all transactions -- the scaling is causing the data to be transformed around '0'
+# We also observed that there is 1 cancellation every 6 transactions as a whole. We can look into the driving factor thats causing this by looking at product combination, region, etc... 
+
+retail = retail[retail$Quantity >= 0,]
+retail = retail[retail$Price > 0,] # The data has large number of free items in transactions... Ignoring them for rigid monetary measure
+
+# Saving this set for re-usability
+# write.csv(retail, row.names = FALSE, 'Retail_cleaned.csv')
+
+# RFM Measures
+
+RDate = max(retail$InvoiceDate)
+CustomerRFM = retail %>%
+  group_by(Customer.ID) %>%
+  summarize(Recency = as.numeric(RDate - max(InvoiceDate)),
+            Frequency = n_distinct(Invoice),
+            Monetary = sum(Quantity * Price))
+
+head(CustomerRFM)
+
+# structure of the RFM data
+str(CustomerRFM)
+
+# Summary of the RFM data
+summary(CustomerRFM)
+
+# Checking for outliers to prevent skewness as we will scale these variables before clustering
+boxplot(CustomerRFM[-1], main="Boxplot for RFM Measures")
+
+# Lets go ahead and remove these outliers for seamless clustering potentially
+R_outliers = boxplot(CustomerRFM$Recency, plot=FALSE)$out
+RFM = CustomerRFM[-which(CustomerRFM$Recency %in% R_outliers),]
+
+F_outliers = boxplot(CustomerRFM$Frequency, plot=FALSE)$out
+RFM = CustomerRFM[-which(CustomerRFM$Frequency %in% F_outliers),]
+
+M_outliers = boxplot(CustomerRFM$Monetary, plot=FALSE)$out
+RFM = CustomerRFM[-which(CustomerRFM$Monetary %in% M_outliers),]
+
+head(RFM)
+
+# structure of the RFM data
+str(RFM)
+
+# Summary of the RFM data
+summary(RFM)
+
+
+# Scale the values
+RFM$Recency = scale(RFM$Recency)
+RFM$Frequency = scale(RFM$Frequency)
+RFM$Monetary = scale(RFM$Monetary)
+
+head(RFM)
+
+boxplot(RFM[-1], main="Boxplot for RFM Measures") # check
+# Visuals & PCA
+
+pairs(~ Recency + Frequency + Monetary,
+      data = RFM,
+      main = "Scatterplot Matrix", pch = 20)
+
+# 3D Plot of all 3 measures
+
+scatterplot3d(RFM$Recency, 
+              RFM$Frequency, 
+              RFM$Monetary,
+              pch = 20,
+              main="3D Scatterplot",
+              xlab = "Recency", 
+              ylab = "Frequency", 
+              zlab = "Monetary")
+
+# This is too hard to read
+
+# Lets use PCA to map all points from 3d to 2d
+# PCA computes a new 3d coordinate system where each coordinate, in order, covers as much variability as possible. So dropping the least important coordinate after PCA will usually give a much better result, and never be worse, than just dropping one of the coordinates without PCA.
+
+RFM_PCA = prcomp(RFM[c(2,3,4)])
+summary(RFM_PCA)
+
+# 2 coordinates together explain close to 90% of the variance of the data, which means that using the first two coordinates will give a reasonable illustration of the customers RFM values
+
+plot(RFM_PCA$x[,1], 
+     RFM_PCA$x[,2], 
+     xlab="PC1 (65%)", 
+     ylab = "PC2 (25%)",
+     main = "PC1 / PC2 - plot",
+     pch = 20, col = "black")
+
+```
+
+# We will go with k-means [Putler segments are cool but too many segments for a business to handle]
+```{r}
+## Customer Segmentation using the Putler method
+# Reference [https://www.putler.com/rfm-analysis/]
+# Finding the scores
+
+n = nrow(RFM)
+RFM$RecencyScore   = as.integer(1 + 5 * (1 - rank(RFM$Recency) / n))
+RFM$FrequencyScore = as.integer(1 + 5 * rank(RFM$Frequency) / n)
+RFM$MonetaryScore  = as.integer(1 + 5 * rank(RFM$Monetary) / n)
+
+
+putlerSegment = function(row) {
+  fm = as.integer((as.integer(row["FrequencyScore"]) + as.integer(row["MonetaryScore"])) / 2) - 1
+  idx = 1 + 5 * (as.integer(row["RecencyScore"]) - 1) + fm
+  switch(idx,
+         "Lost",
+         "Lost",
+         "AtRisk",
+         "AtRisk",
+         "CantLoseThem",
+         "Lost",
+         "Hibernating",
+         "AtRisk",
+         "AtRisk",
+         "AtRisk",
+         "AboutToSleep",
+         "AboutToSleep",
+         "NeedingAttention",
+         "LoyalCustomers",
+         "LoyalCustomers",
+         "Promising",
+         "PotentialLoyalist",
+         "PotentialLoyalist",
+         "LoyalCustomers",
+         "LoyalCustomers",
+         "RecentCustomers",
+         "PotentialLoyalist",
+         "PotentialLoyalist",
+         "LoyalCustomers",
+         "Champions")
+}
+
+# Compute the Putler segments and cleanup data
+RFM$putlerSegment = apply(RFM, 1, putlerSegment)
+
+RFM$RecencyScore = NULL
+RFM$FrequencyScore = NULL
+RFM$MonetaryScore = NULL
+RFM$putlerSegment = as.factor(RFM$putlerSegment)
+
+head(RFM)
+
+colorpalette = c("#023eff", 
+                 "#ff7c00", 
+                 "#1ac938", 
+                 "#e8000b", 
+                 "#9f4800", 
+                 "#f14cc1", 
+                 "#8b2be2", 
+                 "#a3a3a3", 
+                 "#ffc400", 
+                 "#00d7ff")
+
+colors = colorpalette[RFM$putlerSegment]
+plot3d = scatterplot3d(RFM$Recency, 
+                       RFM$Frequency, 
+                       RFM$Monetary,
+                       xlab = "Recency", 
+                       ylab = "Frequency", 
+                       zlab = "Monetary",
+                       main = "Putler Customer Segments",
+                       color = colors,
+                       pch = 20)
+legend(plot3d$xyz.convert(2.9, 10, 40),
+       legend = levels(RFM$putlerSegment),
+       col = colorpalette,
+       pch = 16)
+
+# Good. It works...
+
+# Check in 2d from PCA
+colors = colorpalette[RFM$putlerSegment]
+
+plot(RFM_PCA$x[,1], RFM_PCA$x[,2], 
+     xlab="PC1 (65%)", ylab = "PC2 (25%)",
+     main = "Putler Customer Segments (Mapped to 2D)",
+     pch = 20, col = colors)
+legend("topleft", legend = levels(RFM$putlerSegment),
+       col = colorpalette, pch = 16)
+
+
+# number of customers in each Putler segment is
+RFM %>%
+  group_by(putlerSegment) %>%
+  summarize(n_customers = n()) %>%
+  arrange(desc(n_customers))
+
+```
+
+```{r}
+
+## Customer Segmentation using K-means Clustering Method
+colorpalette = c("#023eff", 
+                 "#ff7c00", 
+                 "#1ac938", 
+                 "#e8000b", 
+                 "#9f4800", 
+                 "#f14cc1", 
+                 "#8b2be2", 
+                 "#a3a3a3", 
+                 "#ffc400", 
+                 "#00d7ff")
+
+
+set.seed(542)
+# install.packages('factoextra')
+library(factoextra)
+df = select(RFM, Recency, Frequency, Monetary)
+
+# Finding Optimal K
+
+# Method - 1
+wcss = vector()
+
+for (i in 1:20) wcss[i] = sum(kmeans(df, i)$withinss)
+plot(1:20,
+     wcss,
+     type = 'b', # for lines and points
+     main = paste('The Elbow Method'),
+     xlab = 'Number of clusters',
+     ylab = 'WCSS')
+
+# Elbow - Optimal Clusters - 3
+
+# Method - 2
+# Silhouette Score
+fviz_nbclust(df, kmeans, method = "silhouette")
+# From the silhouette method, the optimal number of clusters is 3
+
+# Method - 3
+pExplainedVar = rep(0,20)
+for (i in 2:20) {
+  fit = kmeans(df, centers = i, iter.max = 100, nstart = 20)
+  pExplainedVar[i] = 100 * fit$betweenss / fit$totss
+}
+
+plot(1:20, 
+     pExplainedVar, 
+     type="b", 
+     pch = 20, 
+     xlab="Number of Clusters", 
+     ylab="Percentage of Explained Variance by Clusters")
+text(1:20, 
+     pExplainedVar, 
+     labels = 1:20, 
+     cex = 0.7, 
+     pos = 3)
+
+# The best k can be found in the by visually inspecting a curve which starts to flatten after 3 - 4. Lets go with 3.
+
+bestKmeans_k = 3
+
+# Using the best clusters on the RFM data
+k_result = kmeans(df, centers = 3, iter.max = 15, nstart = 25)
+
+# Add the found clusters to the RFM
+RFM$kmeansSegment = as.factor(k_result$cluster)
+
+head(RFM)
+
+# Plotting 3D
+colors = colorpalette[RFM$kmeansSegment]
+
+plot3d = scatterplot3d(RFM$Recency, 
+                       RFM$Frequency, 
+                       RFM$Monetary,
+                       xlab = "Recency", 
+                       ylab = "Frequency", 
+                       zlab = "Monetary", 
+                       main="K-means Customer Segments", 
+                       color = colors, 
+                       pch = 20)
+legend(plot3d$xyz.convert(2.9, 10, 40),
+       legend = levels(RFM$kmeansSegment),
+       col = colorpalette, pch = 20)
+
+fviz_cluster(k_result, 
+             data = df, 
+             geom="point",
+             ellipse.type = "convex",
+             ggtheme = theme_bw())
+
+# Size of Clusters
+k_result$size
+
+# Center of clusters
+k_result$centers
+
+# number of customers in each K-means segment is:
+RFM %>%
+  group_by(kmeansSegment) %>%
+  summarize(NumberOfCustomers = n()) %>%
+  arrange(desc(NumberOfCustomers))
+
+# Lets see what business interpretation we must give to 7 clusters
+
+# Exhibit 1
+colors = colorpalette[RFM$kmeansSegment]
+plot(RFM$Recency, 
+     RFM$Frequency,
+     xlab = "Recency", ylab = "Frequency",
+     main="K-means Customer Segments", 
+     col = colors, 
+     pch = 20)
+legend("topright", 
+       legend = levels(RFM$kmeansSegment),
+       col = colorpalette, 
+       pch = 16)
+
+# Exhibit 2
+plot(RFM$Recency, 
+     RFM$Monetary,
+     xlab = "Recency", ylab = "Monetary",
+     main="K-means Customer Segments", 
+     col = colors, 
+     pch = 20)
+legend("topright", 
+       legend = levels(RFM$kmeansSegment),
+       col = colorpalette, 
+       pch = 16)
+
+
+# Exhibit 3
+plot(RFM$Frequency, 
+     RFM$Monetary,
+     xlab = "Frequency", ylab = "Monetary",
+     main="K-means Customer Segments", 
+     col = colors, 
+     pch = 20)
+legend("topright", 
+       legend = levels(RFM$kmeansSegment),
+       col = colorpalette, 
+       pch = 16)
+
+RFM[,-1] %>% filter(kmeansSegment == 1) %>% summary()
+RFM[,-1] %>% filter(kmeansSegment == 2) %>% summary()
+RFM[,-1] %>% filter(kmeansSegment == 3) %>% summary()
+
+```
+
+
+```{r}
+
+# Tried Hierarchical Clustering today
+
+# calculate distance between vectors
+D = dist(df, method='euclidean')
+
+# H-Cluster
+HC_result = hclust(D, method='ward.D2')
+
+# Dendrogram, customizing the plot to remove labels
+HC_model = as.dendrogram(HC_result)
+nodePar = list(lab.cex = 0.6, 
+               pch = c(NA, 19), 
+               cex = 0.2, 
+               col = "skyblue")
+
+plot(HC_model, 
+     ylab = "Height", 
+     nodePar = nodePar, 
+     leaflab = "none",
+     main = "Dendrogram")
+
+h_cluster = cutree(HC_result, k=3)
+
+# Integrate RFM with H_clusters
+RFM_HC = data.frame(RFM, h_cluster)
+head(RFM_HC, 1)
+
+# size of groups
+table(RFM_HC$h_cluster)
+
+
+head(RFM_HC)
+```
+```{r}
+
+library(dbscan)
+kNNdistplot(df, k = 3)
+# abline(h = 0.1, col = "red")
+# abline(h = 0.3, col = "red")
+# abline(h = 0.4, col = "red")
+abline(h = 0.38, col = "red")
+abline(h = 0.43, col = "blue")
+
+#general roles for DBCAN: if the dataset dimension is larger than 2, the minPts is 2*dim
+db0 <- dbscan(df, eps =0.43, minPts =6)
+db0
+#using our parameters from KNNdistplot and minPts, DBCAN can only capture one cluster. 
+
+db <- dbscan(df, eps =0.38, minPts =158)
+db
+fit.db <- db$cluster
+plot(df, col = fit.db,color= colorpalette)
+#The clustering contains 3 cluster(s) and 2067 noise points.
+
+```
