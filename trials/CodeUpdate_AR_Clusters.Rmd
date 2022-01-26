@@ -1,0 +1,83 @@
+---
+title: "542final_short"
+author: "Thoa Kate Pham"
+date: "12/3/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r AR with 3 clusters}
+library(arules)
+library(arulesViz)
+library(tidyverse)
+library(ggplot2)
+DATA1 = read.csv("data1.csv")
+DATA2 = read.csv("data2.csv")
+DATA3 = read.csv("data3.csv")
+#Cluster 2
+
+INVOICE_LIST2=DATA2 %>%
+    group_by(Invoice) %>%
+    summarize(StockList=list(unique(StockCode)), DescList  = list(unique(Description)))
+
+INVOICE_DESC2=as(INVOICE_LIST2$DescList, 'transactions')
+
+DESCrules2=apriori(INVOICE_DESC2, parameter=list(support=0.01, confidence=0.5))
+#summary(DESCrules2)
+RULE2<- DESCrules2[!is.redundant(DESCrules2) & is.significant(DESCrules2, INVOICE_DESC2)]
+
+#Cluster 3
+INVOICE_LIST3=DATA3 %>%
+    group_by(Invoice) %>%
+    summarize(StockList=list(unique(StockCode)), DescList  = list(unique(Description)))
+
+INVOICE_DESC3=as(INVOICE_LIST3$DescList, 'transactions')
+#inspect(head(INVOICE_CODE3))
+
+DESCrules3=apriori(INVOICE_DESC3, parameter=list(support=0.01, confidence=0.5))
+RULE3<- DESCrules3[!is.redundant(DESCrules3) & is.significant(DESCrules3, INVOICE_DESC3)]
+
+#Cluster 1
+INVOICE_LIST1=DATA1 %>%
+    group_by(Invoice) %>%
+    summarize(StockList=list(unique(StockCode)), DescList  = list(unique(Description)))
+
+INVOICE_DESC1=as(INVOICE_LIST1$DescList, 'transactions')
+
+DESCrules1=apriori(INVOICE_DESC1, parameter=list(support=0.01, confidence=0.5))
+#summary(DESCrules1)
+RULE1<- DESCrules1[!is.redundant(DESCrules1) & is.significant(DESCrules1, INVOICE_DESC1)]
+```
+
+```{r Plot the AR Results}
+
+
+inspect(head(RULE3, n = 10, by = "lift"))
+plot(head(RULE2, n = 10, by = "lift"), method = "paracoord", reorder=TRUE)
+
+inspect(head(RULE1, n = 10, by = "lift"))
+plot(head(RULE1, n = 10, by = "lift"), method = "paracoord", reorder=TRUE)
+
+inspect(head(RULE3, n = 10, by = "lift"))
+plot(head(RULE3, n = 10, by = "lift"), method = "paracoord", reorder=TRUE)
+
+inspect (head(RULE2, n = 10, by = "confidence"))
+plot(head(RULE2, n = 10, by = "confidence"), method = "paracoord", reorder=TRUE)
+
+inspect (head(RULE1, n = 10, by = "confidence"))
+plot(head(RULE1, n = 10, by = "confidence"), method = "paracoord", reorder=TRUE)
+
+inspect (head(RULE3, n = 10, by = "confidence"))
+plot(head(RULE3, n = 10, by = "confidence"), method = "paracoord", reorder=TRUE)
+```
