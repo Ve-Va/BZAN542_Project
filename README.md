@@ -1,28 +1,33 @@
-# BZAN542 [Data Mining] Project
+# BZAN542 Data Mining Project
 
-## **BACKGROUND**
+This repository contains our coursework for the **Online Retail II** data from the UCI Machine Learning Repository. It explores customer purchasing behavior using clustering and association rule mining in R.
 
-The online retailer under consideration in this article is a UK-based and registered non-store business with some 80 members of staff. The company was established in 1981 mainly selling unique all-occasion gifts. For years in the past, the merchant relied heavily on direct mailing catalogues, and orders were taken over phone calls. It was only in 2009, that the company launched its own web site and shifted completely to the Web. Since then, the company has maintained a steady and healthy number of customers from all parts of the United Kingdom and Europe and has accumulated a huge amount of data about many customers. The company also uses Amazon.co.uk to market and sell its products.
+## Repository structure
 
+- **data/** – Raw dataset files (`online_retail_II.xlsx` and CSV splits). Each file is roughly 40–45 MB.
+- **trials/** – R Markdown notebooks performing the analysis. Key notebooks include:
+  - `CodeUpdate_Dec3_v2.Rmd` for data cleaning, feature engineering with RFM metrics, and clustering (k‑means, hierarchical, DBSCAN).
+  - `CodeUpdate_AR_Clusters.Rmd` and `CodeUpdate_AR_Retail.Rmd` for association‑rule mining with the `arules` package.
+  - `.zip` archives of older notebook versions for reference.
+- **BZAN542_Final_Report_Group1.pdf** – Final written report.
+- **ProjectPresentation_Group1.pptx** – Slides summarizing the results.
+- **ProposalPresentation_DataMining.pptx** – Original project proposal.
+- **notes** – Short notes describing the dataset splits.
 
-## **DATA**
+## Running the analysis
 
-Source : UCI Machine Learning Repository
+1. Install R (version 4.0 or later) and required packages:
+   ```r
+   install.packages(c("tidyverse", "arules", "arulesViz",
+                      "cluster", "scatterplot3d", "dbscan", "lubridate"))
+   ```
+2. Open any `.Rmd` file in `trials/` with RStudio or render it via `rmarkdown::render()` to reproduce the analysis.
 
-URL : https://archive.ics.uci.edu/ml/datasets/Online+Retail+II
+## Learning more
 
-Contact :
-Dr. Daqing Chen,
-Course Director: MSc Data Science,
-School of Engineering, London South Bank University.
+- Review the notebooks to see how missing values and return transactions are handled.
+- Examine the construction of RFM features and clustering steps for customer segmentation.
+- Check the association‑rule notebooks for itemset analysis examples.
+- Read the final report and presentation slides for a concise overview of the findings.
 
-Data Set Information:
-
-This Online Retail II data set contains all the transactions occurring for a UK-based and registered, non-store online retail in 2011.
-
-• The company mainly sells unique all-occasion giftware
-
-• Many customers of the company are wholesalers
-
-
-<img width="900" alt="image" src="https://user-images.githubusercontent.com/54652417/151095982-3612ed22-ef03-4188-b1d8-b993b205f560.png">
+Feel free to extend the notebooks or automate parts of the analysis as you experiment.
