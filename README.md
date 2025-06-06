@@ -1,33 +1,33 @@
 # BZAN542 Data Mining Project
 
-This repository contains our analysis of the **Online Retail II** dataset from the UCI Machine Learning Repository.  The project explores customer purchasing behavior through clustering and association rule mining in R.
+This repository contains our coursework for the **Online Retail II** data from the UCI Machine Learning Repository. It explores customer purchasing behavior using clustering and association rule mining in R.
 
-## Repository layout
+## Repository structure
 
-```
-├── data/              Raw dataset files (CSV and Excel)
-├── trials/            R Markdown notebooks with the analysis
-├── BZAN542_Final_Report_Group1.pdf  Final written report
-├── ProjectPresentation_Group1.pptx  Presentation slides
-├── ProposalPresentation_DataMining.pptx  Initial proposal slides
-└── notes              Short notes about the dataset
-```
+- **data/** – Raw dataset files (`online_retail_II.xlsx` and CSV splits). Each file is roughly 40–45 MB.
+- **trials/** – R Markdown notebooks performing the analysis. Key notebooks include:
+  - `CodeUpdate_Dec3_v2.Rmd` for data cleaning, feature engineering with RFM metrics, and clustering (k‑means, hierarchical, DBSCAN).
+  - `CodeUpdate_AR_Clusters.Rmd` and `CodeUpdate_AR_Retail.Rmd` for association‑rule mining with the `arules` package.
+  - `.zip` archives of older notebook versions for reference.
+- **BZAN542_Final_Report_Group1.pdf** – Final written report.
+- **ProjectPresentation_Group1.pptx** – Slides summarizing the results.
+- **ProposalPresentation_DataMining.pptx** – Original project proposal.
+- **notes** – Short notes describing the dataset splits.
 
-- **data/** – Contains `online_retail_II.xlsx` and two CSV splits (`online_retail.csv` and `online_retail2.csv`).  They are provided for convenience; the Excel file is the full dataset.
-- **trials/** – Houses all R Markdown (`.Rmd`) notebooks used during exploration.  Notebooks such as `CodeUpdate_Dec3_v2.Rmd` perform feature engineering (e.g., RFM metrics), clustering (k‑means, hierarchical, DBSCAN) and visualization.  Other notebooks (`CodeUpdate_AR_Clusters.Rmd`, `CodeUpdate_AR_Retail.Rmd`) apply association-rule mining with the `arules` package.
-- **Report and slides** – Summarize the methodology and findings.  These are useful for a quick overview of the project results.
+## Running the analysis
 
-## Getting started
-
-1. Install R (version 4.0 or later recommended) and the following packages:
+1. Install R (version 4.0 or later) and required packages:
    ```r
-   install.packages(c("tidyverse", "arules", "arulesViz", "cluster", "scatterplot3d", "dbscan", "lubridate"))
+   install.packages(c("tidyverse", "arules", "arulesViz",
+                      "cluster", "scatterplot3d", "dbscan", "lubridate"))
    ```
-2. Open any of the `.Rmd` files in `trials/` with RStudio (or run `rmarkdown::render()` from the command line) to reproduce the analyses.
-3. The data files in `data/` are ~40–45 MB each, so ensure there is sufficient disk space before running the notebooks.
+2. Open any `.Rmd` file in `trials/` with RStudio or render it via `rmarkdown::render()` to reproduce the analysis.
 
-## Notes
+## Learning more
 
-The `notes` file briefly explains that `online_retail_II.xlsx` is the original dataset, while the two CSVs are splits for ease of loading in R.
+- Review the notebooks to see how missing values and return transactions are handled.
+- Examine the construction of RFM features and clustering steps for customer segmentation.
+- Check the association‑rule notebooks for itemset analysis examples.
+- Read the final report and presentation slides for a concise overview of the findings.
 
-Feel free to experiment with the notebooks or extend them with additional feature engineering and modeling techniques.
+Feel free to extend the notebooks or automate parts of the analysis as you experiment.
